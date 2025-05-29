@@ -13,17 +13,20 @@ from transformers import logging
 logging.set_verbosity_error()
 warnings.filterwarnings("ignore")
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Her iki modeli de CPU'da çalıştır
+# Streamlit Cloud genelde CUDA desteklemez
+
+device = torch.device("cpu")
 
 # Duygu analizi modeli
 emotion_model_name = "maymuni/bert-base-turkish-cased-emotion-analysis"
 emotion_tokenizer = AutoTokenizer.from_pretrained(emotion_model_name)
-emotion_model = AutoModelForSequenceClassification.from_pretrained(emotion_model_name).to(device)
+emotion_model = AutoModelForSequenceClassification.from_pretrained(emotion_model_name)
 
-# Nefret söylemi modeli doğrudan Hugging Face'ten yüklenecek
+# Nefret söylemi modeli
 hate_model_name = "Urbanhobbit/turkish-offensive-model"
 hate_tokenizer = AutoTokenizer.from_pretrained(hate_model_name)
-hate_model = AutoModelForSequenceClassification.from_pretrained(hate_model_name).to(device)
+hate_model = AutoModelForSequenceClassification.from_pretrained(hate_model_name)
 
 # Etiketler
 id2label = {
@@ -39,7 +42,6 @@ num_labels = emotion_model.config.num_labels
 
 def predict_emotion(sentences, use_none=False, threshold=0.3):
     inputs = emotion_tokenizer(sentences, return_tensors="pt", padding=True, truncation=True)
-    inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():
         logits = emotion_model(**inputs).logits
         probs_all = F.softmax(logits, dim=1).cpu().tolist()
@@ -59,7 +61,6 @@ def predict_emotion(sentences, use_none=False, threshold=0.3):
 
 def predict_offense(sentences):
     inputs = hate_tokenizer(sentences, return_tensors="pt", padding=True, truncation=True)
-    inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():
         logits = hate_model(**inputs).logits
         probs_all = F.softmax(logits, dim=1).cpu().tolist()
