@@ -1,5 +1,5 @@
 import streamlit as st
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModel
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import torch.nn as nn
 import pandas as pd
@@ -20,34 +20,10 @@ emotion_model_name = "maymuni/bert-base-turkish-cased-emotion-analysis"
 emotion_tokenizer = AutoTokenizer.from_pretrained(emotion_model_name)
 emotion_model = AutoModelForSequenceClassification.from_pretrained(emotion_model_name).to(device)
 
-# Nefret söylemi modeli için özel mimari
-class BERT_Arch(nn.Module):
-    def __init__(self, bert):
-        super(BERT_Arch, self).__init__()
-        self.bert = bert
-        self.dropout = nn.Dropout(0.1)
-        self.relu = nn.ReLU()
-        self.fc1 = nn.Linear(768, 512)
-        self.fc3 = nn.Linear(512, 2)
-        self.softmax = nn.LogSoftmax(dim=1)
-
-    def forward(self, sent_id, mask):
-        _, cls_hs = self.bert(sent_id, attention_mask=mask, return_dict=False)
-        x = self.fc1(cls_hs)
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.fc3(x)
-        x = self.softmax(x)
-        return x
-
-hate_model_path = "turkish_offensive_language.pt"
-hate_tokenizer = AutoTokenizer.from_pretrained("dbmdz/bert-base-turkish-cased")
-hate_bert = AutoModel.from_pretrained("dbmdz/bert-base-turkish-cased", return_dict=False)
-hate_model = BERT_Arch(hate_bert).to(device)
-state_dict = torch.load(hate_model_path, map_location=device)
-state_dict.pop("bert.embeddings.position_ids", None)
-hate_model.load_state_dict(state_dict)
-hate_model.eval()
+# Nefret söylemi modeli doğrudan Hugging Face'ten yüklenecek
+hate_model_name = "Urbanhobbit/turkish-offensive-model"
+hate_tokenizer = AutoTokenizer.from_pretrained(hate_model_name)
+hate_model = AutoModelForSequenceClassification.from_pretrained(hate_model_name).to(device)
 
 # Etiketler
 id2label = {
@@ -85,8 +61,8 @@ def predict_offense(sentences):
     inputs = hate_tokenizer(sentences, return_tensors="pt", padding=True, truncation=True)
     inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():
-        preds = hate_model(inputs["input_ids"], inputs["attention_mask"])
-        probs_all = F.softmax(preds, dim=1).cpu().tolist()
+        logits = hate_model(**inputs).logits
+        probs_all = F.softmax(logits, dim=1).cpu().tolist()
 
     results = []
     for sent, probs in zip(sentences, probs_all):
