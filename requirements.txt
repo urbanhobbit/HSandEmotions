@@ -4,3 +4,4 @@ torch
 pandas
 matplotlib
 python-docx
+requests
